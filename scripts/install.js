@@ -240,6 +240,8 @@ if (require.main === module) {
   });
 } else {
   module.exports = {
+    IS_WINDOWS,
+    BINARY_NAME,
     detectPlatform,
     loadPackageJson,
     buildUrl,

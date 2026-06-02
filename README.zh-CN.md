@@ -90,10 +90,10 @@ chmod +x ocr && sudo mv ocr /usr/local/bin/ocr
 curl -Lo ocr https://github.com/alibaba/open-code-review/releases/latest/download/opencodereview-linux-arm64
 chmod +x ocr && sudo mv ocr /usr/local/bin/ocr
 
-# Windows (x86_64)
+# Windows (x86_64) — 将 ocr.exe 移动到 PATH 目录中
 curl -Lo ocr.exe https://github.com/alibaba/open-code-review/releases/latest/download/opencodereview-windows-amd64.exe
 
-# Windows (ARM64)
+# Windows (ARM64) — 将 ocr.exe 移动到 PATH 目录中
 curl -Lo ocr.exe https://github.com/alibaba/open-code-review/releases/latest/download/opencodereview-windows-arm64.exe
 ```
 

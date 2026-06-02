@@ -141,23 +141,29 @@ func TestMakefileBuildMatchesURLPattern(t *testing.T) {
 	}
 	outputTemplate := m[1]
 
-	platforms := []struct{ os, arch string }{
-		{"linux", "amd64"},
-		{"linux", "arm64"},
-		{"darwin", "amd64"},
-		{"darwin", "arm64"},
+	platforms := []struct{ os, arch, ext string }{
+		{"linux", "amd64", ""},
+		{"linux", "arm64", ""},
+		{"darwin", "amd64", ""},
+		{"darwin", "arm64", ""},
+		{"windows", "amd64", ".exe"},
+		{"windows", "arm64", ".exe"},
 	}
 	for _, p := range platforms {
 		rendered := outputTemplate
 		rendered = strings.ReplaceAll(rendered, "$(BINARY_NAME)", "opencodereview")
 		rendered = strings.ReplaceAll(rendered, "$(1)", p.os)
 		rendered = strings.ReplaceAll(rendered, "$(2)", p.arch)
+		rendered = strings.ReplaceAll(rendered, "$(3)", p.ext)
 
 		url := pkg.OcrConfig.URLPattern
 		url = strings.ReplaceAll(url, "{version}", "1.0.7")
 		url = strings.ReplaceAll(url, "{os}", p.os)
 		url = strings.ReplaceAll(url, "{arch}", p.arch)
 		expected := extractFilenameFromURL(url)
+		if p.ext != "" {
+			expected += p.ext
+		}
 
 		if rendered != expected {
 			t.Errorf("Makefile produces %q, urlPattern expects %q", rendered, expected)

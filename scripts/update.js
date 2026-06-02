@@ -9,6 +9,8 @@ const https = require("https");
 const { spawnSync } = require("child_process");
 
 const {
+  IS_WINDOWS,
+  BINARY_NAME,
   detectPlatform,
   loadPackageJson,
   buildUrl,
@@ -16,9 +18,6 @@ const {
   downloadBinary,
   computeChecksum,
 } = require("./install.js");
-
-const IS_WINDOWS = process.platform === "win32";
-const BINARY_NAME = IS_WINDOWS ? "opencodereview.exe" : "opencodereview";
 const packageRoot = path.join(__dirname, "..");
 const binDir = path.join(packageRoot, "bin");
 const binaryPath = path.join(binDir, BINARY_NAME);
@@ -197,7 +196,26 @@ async function main() {
       }
     }
 
-    fs.renameSync(tempPath, binaryPath);
+    if (IS_WINDOWS) {
+      const oldPath = binaryPath + ".old";
+      try { fs.unlinkSync(oldPath); } catch (_) {}
+      try {
+        fs.renameSync(binaryPath, oldPath);
+      } catch (e) {
+        if (fs.existsSync(binaryPath)) {
+          throw e;
+        }
+      }
+      try {
+        fs.renameSync(tempPath, binaryPath);
+      } catch (e) {
+        try { fs.renameSync(oldPath, binaryPath); } catch (_) {}
+        throw e;
+      }
+      try { fs.unlinkSync(oldPath); } catch (_) {}
+    } else {
+      fs.renameSync(tempPath, binaryPath);
+    }
   } catch (_) {
     cleanupTemp();
   } finally {
