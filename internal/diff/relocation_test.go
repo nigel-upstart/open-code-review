@@ -3,7 +3,6 @@ package diff
 import (
 	"context"
 	"errors"
-	"net/http"
 	"testing"
 
 	"github.com/open-code-review/open-code-review/internal/config/template"
@@ -16,20 +15,8 @@ type mockLLMClient struct {
 	err      error
 }
 
-func (m *mockLLMClient) Completions(req llm.ChatRequest) (*llm.ChatResponse, error) {
-	return m.response, m.err
-}
-
 func (m *mockLLMClient) CompletionsWithCtx(_ context.Context, req llm.ChatRequest) (*llm.ChatResponse, error) {
 	return m.response, m.err
-}
-
-func (m *mockLLMClient) StreamCompletion(req llm.ChatRequest, cb func(chunk []byte) error) error {
-	return m.err
-}
-
-func (m *mockLLMClient) StreamCompletionWithCtx(_ context.Context, req llm.ChatRequest, cb func(chunk []byte) error) error {
-	return m.err
 }
 
 func newMockResponse(content string) *llm.ChatResponse {
@@ -37,7 +24,6 @@ func newMockResponse(content string) *llm.ChatResponse {
 		Choices: []llm.Choice{
 			{Message: llm.ResponseMessage{Role: "assistant", Content: &content}},
 		},
-		Headers: http.Header{},
 	}
 }
 
