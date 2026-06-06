@@ -37,6 +37,7 @@ type LLMClient interface {
 	Completions(req ChatRequest) (*ChatResponse, error)
 	CompletionsWithCtx(ctx context.Context, req ChatRequest) (*ChatResponse, error)
 	StreamCompletion(req ChatRequest, cb func(chunk []byte) error) error
+	StreamCompletionWithCtx(ctx context.Context, req ChatRequest, cb func(chunk []byte) error) error
 }
 
 // --- Shared data types ---
@@ -356,6 +357,11 @@ func (c *OpenAIClient) GeneralRequestWithCtx(ctx context.Context, messages []Mes
 
 // StreamCompletion initiates a streaming chat completion. The callback is invoked per chunk.
 func (c *OpenAIClient) StreamCompletion(req ChatRequest, cb func(chunk []byte) error) error {
+	return c.StreamCompletionWithCtx(context.Background(), req, cb)
+}
+
+// StreamCompletionWithCtx initiates a streaming chat completion with context support for cancellation and timeout.
+func (c *OpenAIClient) StreamCompletionWithCtx(ctx context.Context, req ChatRequest, cb func(chunk []byte) error) error {
 	req.Stream = true
 
 	model := req.Model
@@ -363,7 +369,7 @@ func (c *OpenAIClient) StreamCompletion(req ChatRequest, cb func(chunk []byte) e
 		model = c.cfg.Model
 	}
 
-	return c.withRetry(func() error {
+	return c.withRetryCtx(ctx, func() error {
 		body := make(map[string]any)
 		b, _ := json.Marshal(req)
 		json.Unmarshal(b, &body)
@@ -373,7 +379,7 @@ func (c *OpenAIClient) StreamCompletion(req ChatRequest, cb func(chunk []byte) e
 		}
 
 		payload, _ := json.Marshal(body)
-		httpReq, err := http.NewRequest(http.MethodPost, c.cfg.URL, bytes.NewReader(payload))
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.URL, bytes.NewReader(payload))
 		if err != nil {
 			return fmt.Errorf("create request: %w", err)
 		}
@@ -528,6 +534,11 @@ func (c *AnthropicClient) CompletionsWithCtx(ctx context.Context, req ChatReques
 // StreamCompletion initiates a streaming chat completion using SSE. The callback
 // is invoked per chunk with raw JSON data stripped of the "data: " prefix.
 func (c *AnthropicClient) StreamCompletion(req ChatRequest, cb func(chunk []byte) error) error {
+	return c.StreamCompletionWithCtx(context.Background(), req, cb)
+}
+
+// StreamCompletionWithCtx initiates a streaming chat completion with context support for cancellation and timeout.
+func (c *AnthropicClient) StreamCompletionWithCtx(ctx context.Context, req ChatRequest, cb func(chunk []byte) error) error {
 	req.Stream = true
 
 	model := req.Model
@@ -535,7 +546,7 @@ func (c *AnthropicClient) StreamCompletion(req ChatRequest, cb func(chunk []byte
 		model = c.cfg.Model
 	}
 
-	return c.withRetry(func() error {
+	return c.withRetryCtx(ctx, func() error {
 		body := c.buildRequestBody(model, req)
 		body.Stream = true
 
@@ -544,7 +555,7 @@ func (c *AnthropicClient) StreamCompletion(req ChatRequest, cb func(chunk []byte
 			return fmt.Errorf("marshal request body: %w", err)
 		}
 
-		httpReq, err := http.NewRequest(http.MethodPost, c.cfg.URL, bytes.NewReader(payload))
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.URL, bytes.NewReader(payload))
 		if err != nil {
 			return fmt.Errorf("create request: %w", err)
 		}
@@ -574,13 +585,11 @@ func (c *AnthropicClient) StreamCompletion(req ChatRequest, cb func(chunk []byte
 		for scanner.Scan() {
 			line := scanner.Text()
 
-			// Capture event type line: "event: message_delta"
 			if strings.HasPrefix(line, "event: ") {
 				eventType = strings.TrimPrefix(line, "event: ")
 				continue
 			}
 
-			// Skip empty lines and non-data lines
 			if !strings.HasPrefix(line, "data: ") {
 				continue
 			}
@@ -590,7 +599,6 @@ func (c *AnthropicClient) StreamCompletion(req ChatRequest, cb func(chunk []byte
 				continue
 			}
 
-			// message_stop signals end of stream
 			if eventType == "message_stop" {
 				break
 			}

@@ -153,6 +153,7 @@ type partitionResult struct {
 type compressionJob struct {
 	done    chan struct{}
 	rebuilt []llm.Message
+	cancel  context.CancelFunc
 }
 
 // Agent orchestrates the AI-powered code review.
@@ -848,7 +849,7 @@ func (a *Agent) performLlmCodeReview(ctx context.Context, messages []llm.Message
 			consecutiveEmptyRounds = 0
 		}
 
-		succeed := a.addNextMessage(content, calls, results, &messages, newPath)
+		succeed := a.addNextMessage(ctx, content, calls, results, &messages, newPath)
 		if !succeed {
 			fmt.Fprintf(stdout.Writer(), "[ocr] Context compression exceeded threshold for %s, stopping.\n", newPath)
 			break
@@ -999,7 +1000,7 @@ func (a *Agent) collectPendingComments() []model.LlmComment {
 // Implements dual-threshold compression:
 //   - 60% of MaxTokens: trigger async background compression (non-blocking)
 //   - 80% of MaxTokens: perform synchronous compression immediately
-func (a *Agent) addNextMessage(assistantContent string, toolCalls []llm.ToolCall, results []tool.ToolCallResult, messages *[]llm.Message, filePath string) bool {
+func (a *Agent) addNextMessage(ctx context.Context, assistantContent string, toolCalls []llm.ToolCall, results []tool.ToolCallResult, messages *[]llm.Message, filePath string) bool {
 	maxAllowed := a.args.Template.MaxTokens
 	softLimit := int(float64(maxAllowed) * tokenSoftThreshold)
 	warnLimit := int(float64(maxAllowed) * tokenWarningThreshold)
@@ -1012,13 +1013,13 @@ func (a *Agent) addNextMessage(assistantContent string, toolCalls []llm.ToolCall
 	// Hard threshold: synchronous compression.
 	if tokenCount > warnLimit {
 		a.cancelPendingCompression()
-		*messages, _ = a.runCompression(*messages, filePath)
+		*messages, _ = a.runCompression(ctx, *messages, filePath)
 		tokenCount = countMessagesTokens(*messages)
 	}
 
 	// Soft threshold: async compression.
 	if tokenCount > softLimit && a.pendingJob == nil {
-		a.triggerAsyncCompression(*messages, filePath)
+		a.triggerAsyncCompression(ctx, *messages, filePath)
 	}
 
 	// Add assistant message with tool_calls when present.
@@ -1037,7 +1038,7 @@ func (a *Agent) addNextMessage(assistantContent string, toolCalls []llm.ToolCall
 	finalCount := countMessagesTokens(*messages)
 	if finalCount > warnLimit {
 		a.cancelPendingCompression()
-		*messages, _ = a.runCompression(*messages, filePath)
+		*messages, _ = a.runCompression(ctx, *messages, filePath)
 	}
 
 	return countMessagesTokens(*messages) < warnLimit
@@ -1154,7 +1155,7 @@ func stripMarkdownFences(s string) string {
 // runCompression performs three-zone memory compression on the given messages.
 // It summarizes the compress zone while preserving the active zone intact.
 // Returns the rebuilt messages slice: [frozen] + [compressed_summary] + [active].
-func (a *Agent) runCompression(msgs []llm.Message, filePath string) ([]llm.Message, error) {
+func (a *Agent) runCompression(ctx context.Context, msgs []llm.Message, filePath string) ([]llm.Message, error) {
 	if len(a.args.Template.MemoryCompressionTask.Messages) == 0 || len(msgs) <= 2 {
 		return msgs[:min(len(msgs), 2)], nil
 	}
@@ -1173,7 +1174,7 @@ func (a *Agent) runCompression(msgs []llm.Message, filePath string) ([]llm.Messa
 	}
 
 	startTime := time.Now()
-	resp, err := a.args.LLMClient.Completions(llm.ChatRequest{
+	resp, err := a.args.LLMClient.CompletionsWithCtx(ctx, llm.ChatRequest{
 		Model:     a.args.Model,
 		Messages:  compressionMsgs,
 		MaxTokens: a.args.Template.MaxTokens,
@@ -1214,16 +1215,19 @@ func (a *Agent) runCompression(msgs []llm.Message, filePath string) ([]llm.Messa
 }
 
 // triggerAsyncCompression kicks off a background compression job.
-func (a *Agent) triggerAsyncCompression(messages []llm.Message, filePath string) {
+func (a *Agent) triggerAsyncCompression(ctx context.Context, messages []llm.Message, filePath string) {
 	msgSnapshot := copyMessages(messages)
 
-	job := &compressionJob{done: make(chan struct{})}
+	asyncCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
+
+	job := &compressionJob{done: make(chan struct{}), cancel: cancel}
 	a.compressionMu.Lock()
 	a.pendingJob = job
 	a.compressionMu.Unlock()
 
 	go func() {
-		rebuilt, _ := a.runCompression(msgSnapshot, filePath)
+		defer cancel()
+		rebuilt, _ := a.runCompression(asyncCtx, msgSnapshot, filePath)
 
 		a.compressionMu.Lock()
 		defer a.compressionMu.Unlock()
@@ -1267,6 +1271,7 @@ func (a *Agent) cancelPendingCompression() {
 	defer a.compressionMu.Unlock()
 
 	if a.pendingJob != nil {
+		a.pendingJob.cancel()
 		a.pendingJob = nil
 	}
 }

@@ -28,6 +28,10 @@ func (m *mockLLMClient) StreamCompletion(req llm.ChatRequest, cb func(chunk []by
 	return m.err
 }
 
+func (m *mockLLMClient) StreamCompletionWithCtx(_ context.Context, req llm.ChatRequest, cb func(chunk []byte) error) error {
+	return m.err
+}
+
 func newMockResponse(content string) *llm.ChatResponse {
 	return &llm.ChatResponse{
 		Choices: []llm.Choice{
