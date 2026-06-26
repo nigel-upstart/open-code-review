@@ -160,3 +160,170 @@ func TestApplyLanguage_DefaultEnglish(t *testing.T) {
 		t.Errorf("MainTask system message does not end with %q", suffix)
 	}
 }
+
+func TestValidate_Template_Errors(t *testing.T) {
+	cases := []struct {
+		name    string
+		tpl     Template
+		wantErr string
+	}{
+		{
+			name:    "zero MaxTokens",
+			tpl:     Template{MaxTokens: 0, MaxToolRequestTimes: 1, MainTask: LlmConversation{Messages: []ChatMessage{{Role: "system", Content: "x"}}}},
+			wantErr: "max_tokens must be positive",
+		},
+		{
+			name:    "negative MaxTokens",
+			tpl:     Template{MaxTokens: -1, MaxToolRequestTimes: 1, MainTask: LlmConversation{Messages: []ChatMessage{{Role: "system", Content: "x"}}}},
+			wantErr: "max_tokens must be positive",
+		},
+		{
+			name:    "zero MaxToolRequestTimes",
+			tpl:     Template{MaxTokens: 100, MaxToolRequestTimes: 0, MainTask: LlmConversation{Messages: []ChatMessage{{Role: "system", Content: "x"}}}},
+			wantErr: "max_tool_request_times must be positive",
+		},
+		{
+			name:    "empty MainTask messages",
+			tpl:     Template{MaxTokens: 100, MaxToolRequestTimes: 1, MainTask: LlmConversation{Messages: nil}},
+			wantErr: "main_task.messages must not be empty",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.tpl.Validate()
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("error %q does not contain %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidate_ScanTemplate(t *testing.T) {
+	valid := ScanTemplate{
+		MaxTokens:           100,
+		MaxToolRequestTimes: 1,
+		MainTask:            LlmConversation{Messages: []ChatMessage{{Role: "system", Content: "x"}}},
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid ScanTemplate.Validate() error: %v", err)
+	}
+
+	cases := []struct {
+		name    string
+		tpl     ScanTemplate
+		wantErr string
+	}{
+		{
+			name:    "zero MaxTokens",
+			tpl:     ScanTemplate{MaxTokens: 0, MaxToolRequestTimes: 1, MainTask: LlmConversation{Messages: []ChatMessage{{Role: "system", Content: "x"}}}},
+			wantErr: "scan: max_tokens must be positive",
+		},
+		{
+			name:    "zero MaxToolRequestTimes",
+			tpl:     ScanTemplate{MaxTokens: 100, MaxToolRequestTimes: 0, MainTask: LlmConversation{Messages: []ChatMessage{{Role: "system", Content: "x"}}}},
+			wantErr: "scan: max_tool_request_times must be positive",
+		},
+		{
+			name:    "empty MainTask messages",
+			tpl:     ScanTemplate{MaxTokens: 100, MaxToolRequestTimes: 1, MainTask: LlmConversation{Messages: nil}},
+			wantErr: "scan: main_task.messages must not be empty",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.tpl.Validate()
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("error %q does not contain %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestLoadScanDefault_Validate(t *testing.T) {
+	tpl, err := LoadScanDefault()
+	if err != nil {
+		t.Fatalf("LoadScanDefault: %v", err)
+	}
+	if err := tpl.Validate(); err != nil {
+		t.Errorf("loaded scan template should be valid: %v", err)
+	}
+}
+
+func TestApplyLanguage_ScanTemplate_AllOptionalTasks(t *testing.T) {
+	tpl, err := LoadScanDefault()
+	if err != nil {
+		t.Fatalf("LoadScanDefault: %v", err)
+	}
+	if tpl.DedupTask == nil {
+		t.Fatal("DedupTask should be present in default scan template")
+	}
+	if tpl.ProjectSummaryTask == nil {
+		t.Fatal("ProjectSummaryTask should be present in default scan template")
+	}
+
+	tpl.ApplyLanguage("Japanese")
+	suffix := "Always respond in Japanese."
+
+	check := func(name string, conv *LlmConversation) {
+		t.Helper()
+		if conv == nil {
+			return
+		}
+		for _, m := range conv.Messages {
+			if m.Role == "system" && !strings.Contains(m.Content, suffix) {
+				t.Errorf("%s system message missing language directive", name)
+			}
+		}
+	}
+	check("MainTask", &tpl.MainTask)
+	check("PlanTask", tpl.PlanTask)
+	check("DedupTask", tpl.DedupTask)
+	check("ProjectSummaryTask", tpl.ProjectSummaryTask)
+	check("MemoryCompressionTask", &tpl.MemoryCompressionTask)
+}
+
+func TestApplyLanguage_ScanTemplate_NilOptionalTasks(t *testing.T) {
+	tpl := &ScanTemplate{
+		MainTask:              LlmConversation{Messages: []ChatMessage{{Role: "system", Content: "base"}}},
+		MemoryCompressionTask: LlmConversation{Messages: []ChatMessage{{Role: "system", Content: "compress"}}},
+	}
+	tpl.ApplyLanguage("Korean")
+	suffix := "Always respond in Korean."
+	if !strings.Contains(tpl.MainTask.Messages[0].Content, suffix) {
+		t.Error("MainTask should contain language directive")
+	}
+	if !strings.Contains(tpl.MemoryCompressionTask.Messages[0].Content, suffix) {
+		t.Error("MemoryCompressionTask should contain language directive")
+	}
+}
+
+func TestApplyLanguage_SkipsNonSystemMessages(t *testing.T) {
+	tpl := &Template{
+		MainTask: LlmConversation{Messages: []ChatMessage{
+			{Role: "system", Content: "sys"},
+			{Role: "user", Content: "usr"},
+		}},
+		MemoryCompressionTask: LlmConversation{Messages: []ChatMessage{
+			{Role: "system", Content: "sys"},
+		}},
+	}
+	tpl.ApplyLanguage("French")
+	if strings.Contains(tpl.MainTask.Messages[1].Content, "French") {
+		t.Error("user-role message should not get language directive")
+	}
+}
+
+func TestResolveLang(t *testing.T) {
+	if got := resolveLang(""); got != "English" {
+		t.Errorf("resolveLang(\"\") = %q, want \"English\"", got)
+	}
+	if got := resolveLang("German"); got != "German" {
+		t.Errorf("resolveLang(\"German\") = %q, want \"German\"", got)
+	}
+}
