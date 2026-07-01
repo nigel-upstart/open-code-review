@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { useTranslation } from '../i18n';
 import { useResponsive } from '../hooks/useResponsive';
 import ColorBends from './ColorBends';
-import docDownloadIcon from '../assets/icons/doc-download.svg';
+import docDownloadIcon from '../assets/icons/doc-download-green.svg';
 import copyIcon from '../assets/icons/icon-copy.svg';
 
 
