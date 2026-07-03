@@ -27,7 +27,6 @@ const sidebarTree: SidebarGroup[] = [
   {
     groupLabelKey: 'docs.sidebar.gettingStarted',
     items: [
-      { id: 'sb-overview', labelKey: 'docs.sidebar.overview', slug: 'overview' },
       { id: 'sb-quickstart', labelKey: 'docs.sidebar.quickstart', slug: 'quickstart' },
       { id: 'sb-installation', labelKey: 'docs.sidebar.installation', slug: 'installation' },
       { id: 'sb-configuration', labelKey: 'docs.sidebar.configuration', slug: 'configuration' },
@@ -111,7 +110,7 @@ function buildFlatDocList(): { slug: DocSlug; labelKey: string }[] {
 const flatDocList = buildFlatDocList();
 
 const DocsPage: React.FC = () => {
-  const [activeSlug, setActiveSlug] = useState<DocSlug>('overview');
+  const [activeSlug, setActiveSlug] = useState<DocSlug>('quickstart');
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({ 'sb-integrations': false });
   const [activeHeadingId, setActiveHeadingId] = useState<string>('');
   const [hoveredHeadingId, setHoveredHeadingId] = useState<string>('');

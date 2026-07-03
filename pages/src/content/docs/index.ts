@@ -1,7 +1,6 @@
 /* Docs content index — imports all markdown files and provides a lookup by slug + language */
 
 // English docs
-import enOverview from './en/overview.md';
 import enQuickstart from './en/quickstart.md';
 import enInstallation from './en/installation.md';
 import enConfiguration from './en/configuration.md';
@@ -20,7 +19,6 @@ import enContributing from './en/contributing.md';
 import enFaq from './en/faq.md';
 
 // Chinese docs
-import zhOverview from './zh/overview.md';
 import zhQuickstart from './zh/quickstart.md';
 import zhInstallation from './zh/installation.md';
 import zhConfiguration from './zh/configuration.md';
@@ -39,7 +37,6 @@ import zhContributing from './zh/contributing.md';
 import zhFaq from './zh/faq.md';
 
 // Japanese docs
-import jaOverview from './ja/overview.md';
 import jaQuickstart from './ja/quickstart.md';
 import jaInstallation from './ja/installation.md';
 import jaConfiguration from './ja/configuration.md';
@@ -58,7 +55,6 @@ import jaContributing from './ja/contributing.md';
 import jaFaq from './ja/faq.md';
 
 export type DocSlug =
-  | 'overview'
   | 'quickstart'
   | 'installation'
   | 'configuration'
@@ -77,7 +73,6 @@ export type DocSlug =
   | 'faq';
 
 const enDocs: Record<DocSlug, string> = {
-  'overview': enOverview,
   'quickstart': enQuickstart,
   'installation': enInstallation,
   'configuration': enConfiguration,
@@ -97,7 +92,6 @@ const enDocs: Record<DocSlug, string> = {
 };
 
 const zhDocs: Record<DocSlug, string> = {
-  'overview': zhOverview,
   'quickstart': zhQuickstart,
   'installation': zhInstallation,
   'configuration': zhConfiguration,
@@ -117,7 +111,6 @@ const zhDocs: Record<DocSlug, string> = {
 };
 
 const jaDocs: Record<DocSlug, string> = {
-  'overview': jaOverview,
   'quickstart': jaQuickstart,
   'installation': jaInstallation,
   'configuration': jaConfiguration,
